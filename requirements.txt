@@ -1,5 +1,6 @@
 flask
-jinja2
-sqlalchemy
-reportlab
 gunicorn
+sqlalchemy
+flask_sqlalchemy
+jinja2
+reportlab
