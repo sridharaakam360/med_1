@@ -1,5 +1,5 @@
 import os
-from flask import Flask, redirect, url_for
+from flask import Flask
 
 def create_app():
     app = Flask(__name__)
@@ -14,6 +14,6 @@ def create_app():
 
     @app.route("/")
     def index():
-        return redirect(url_for("billing_bp.billing"))
+        return "<h1>✅ Medical Shop App is Running</h1><p>Use /billing or /inventory</p>"
 
     return app
