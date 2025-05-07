@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Billing</h2>
+<form method="post" action="/billing/submit">
+    <input name="customer_name" placeholder="Customer Name" required><br><br>
+    <label>Select Medicines:</label><br>
+    {% for item in inventory %}
+        <input type="checkbox" name="items" value="{{ item.name }}|{{ item.price }}"> 
+        {{ item.name }} (₹{{ item.price }}) [{{ item.schedule }}] <br>
+    {% endfor %}
+    <br>
+    <button type="submit">Generate Bill</button>
+</form>
+{% endblock %}
+
