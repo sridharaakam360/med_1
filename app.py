@@ -23,8 +23,25 @@ def init_db():
         if not os.path.exists(DB_DIR):
             os.makedirs(DB_DIR)
             logger.debug(f"Created database directory: {DB_DIR}")
-        
-        # Connect to the database and enable foreign key support
+        else:
+            logger.debug(f"Database directory already exists: {DB_DIR}")
+
+        # Check if the database file exists and is invalid
+        if os.path.exists(DB_PATH):
+            try:
+                # Try to connect and execute a simple query to test if it's a valid database
+                conn = sqlite3.connect(DB_PATH)
+                c = conn.cursor()
+                c.execute('SELECT 1')  # A simple query to test the database
+                conn.close()
+                logger.debug(f"Existing database file is valid: {DB_PATH}")
+            except sqlite3.DatabaseError as e:
+                logger.warning(f"Existing database file is invalid or corrupted: {e}. Deleting and recreating.")
+                os.remove(DB_PATH)  # Delete the invalid file
+        else:
+            logger.debug(f"No database file found at {DB_PATH}. Creating a new one.")
+
+        # Connect to the database (this will create the file if it doesn't exist)
         conn = sqlite3.connect(DB_PATH)
         conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign keys
         c = conn.cursor()
@@ -78,7 +95,7 @@ def get_db_connection():
         raise
 
 # Initialize the database when the module is loaded
-init_db()  # Moved outside the if __name__ == '__main__': block
+init_db()
 
 @app.route('/')
 def index():
