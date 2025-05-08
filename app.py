@@ -77,7 +77,10 @@ def get_db_connection():
         logger.error(f"Error connecting to database: {e}")
         raise
 
-@app.route('/')  # Fixed the typo by removing 'plunging'
+# Initialize the database when the module is loaded
+init_db()  # Moved outside the if __name__ == '__main__': block
+
+@app.route('/')
 def index():
     return render_template('index.html')
 
@@ -171,5 +174,4 @@ def suppliers():
     return render_template('suppliers.html', suppliers=suppliers)
 
 if __name__ == '__main__':
-    init_db()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
