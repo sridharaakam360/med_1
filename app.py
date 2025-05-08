@@ -2,51 +2,88 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from datetime import datetime
 import sqlite3
 import os
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'  # Replace with a secure key for production
 
 # Database setup
-DB_PATH = 'database/medical_shop.db'
+# Use an absolute path for the database
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_DIR = os.path.join(BASE_DIR, 'database')
+DB_PATH = os.path.join(DB_DIR, 'medical_shop.db')
 
 def init_db():
-    if not os.path.exists('database'):
-        os.makedirs('database')
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS products (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 name TEXT NOT NULL,
-                 quantity INTEGER NOT NULL,
-                 price REAL NOT NULL,
-                 expiry_date TEXT NOT NULL,
-                 supplier_id INTEGER)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS suppliers (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 name TEXT NOT NULL,
-                 contact TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS bills (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 customer_name TEXT NOT NULL,
-                 total_amount REAL NOT NULL,
-                 bill_date TEXT NOT NULL)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS bill_items (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 bill_id INTEGER,
-                 product_id INTEGER,
-                 quantity INTEGER,
-                 FOREIGN KEY(bill_id) REFERENCES bills(id),
-                 FOREIGN KEY(product_id) REFERENCES products(id))''')
-    conn.commit()
-    conn.close()
+    try:
+        # Ensure the database directory exists
+        if not os.path.exists(DB_DIR):
+            os.makedirs(DB_DIR)
+            logger.debug(f"Created database directory: {DB_DIR}")
+        
+        # Connect to the database and enable foreign key support
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign keys
+        c = conn.cursor()
+        
+        # Create tables
+        c.execute('''CREATE TABLE IF NOT EXISTS products (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     name TEXT NOT NULL,
+                     quantity INTEGER NOT NULL,
+                     price REAL NOT NULL,
+                     expiry_date TEXT NOT NULL,
+                     supplier_id INTEGER,
+                     FOREIGN KEY(supplier_id) REFERENCES suppliers(id))''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS suppliers (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     name TEXT NOT NULL,
+                     contact TEXT)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS bills (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     customer_name TEXT NOT NULL,
+                     total_amount REAL NOT NULL,
+                     bill_date TEXT NOT NULL)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS bill_items (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     bill_id INTEGER,
+                     product_id INTEGER,
+                     quantity INTEGER,
+                     FOREIGN KEY(bill_id) REFERENCES bills(id),
+                     FOREIGN KEY(product_id) REFERENCES products(id))''')
+        
+        conn.commit()
+        logger.debug(f"Database initialized successfully at {DB_PATH}")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        raise
+    finally:
+        conn.close()
 
-@app.route('/')
+# Test database connection before each route
+def get_db_connection():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign keys for this connection
+        logger.debug("Database connection established")
+        return conn
+    except Exception as e:
+        logger.error(f"Error connecting to database: {e}")
+        raise
+
+@app plunging.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/billing', methods=['GET', 'POST'])
 def billing():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     c = conn.cursor()
     if request.method == 'POST':
         customer_name = request.form['customer_name']
@@ -85,7 +122,7 @@ def billing():
 
 @app.route('/inventory', methods=['GET', 'POST'])
 def inventory():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     c = conn.cursor()
     if request.method == 'POST':
         name = request.form['name']
@@ -108,7 +145,7 @@ def inventory():
 
 @app.route('/expiry')
 def expiry():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     c = conn.cursor()
     today = datetime.now().strftime('%Y-%m-%d')
     c.execute('SELECT id, name, quantity, expiry_date FROM products WHERE expiry_date <= ?', (today,))
@@ -118,7 +155,7 @@ def expiry():
 
 @app.route('/suppliers', methods=['GET', 'POST'])
 def suppliers():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     c = conn.cursor()
     if request.method == 'POST':
         name = request.form['name']
