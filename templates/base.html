@@ -3,30 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Medical Shop Biller</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <title>Medical Shop - {% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
     <header>
-        <h1>Medical Shop Biller & Inventory Manager</h1>
+        <h1>Medical Shop Management</h1>
         <nav>
-            <a href="{{ url_for('index') }}">Home</a>
-            <a href="{{ url_for('billing') }}">Billing</a>
-            <a href="{{ url_for('inventory') }}">Inventory</a>
-            <a href="{{ url_for('expiry') }}">Expiry Alerts</a>
+            <a href="{{ url_for('index') }}">Home</a> |
+            <a href="{{ url_for('billing') }}">Billing</a> |
+            <a href="{{ url_for('inventory') }}">Inventory</a> |
+            <a href="{{ url_for('expiry') }}">Expiry Alerts</a> |
             <a href="{{ url_for('suppliers') }}">Suppliers</a>
         </nav>
     </header>
-    <div class="container">
+    <main>
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                {% for message in messages %}
-                    <div class="flash">{{ message }}</div>
-                {% endfor %}
+                <ul>
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
             {% endif %}
         {% endwith %}
-        {% block content %}{% endblock %}
-    </div>
-    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+        {% block content %}
+        {% endblock %}
+    </main>
 </body>
 </html>
