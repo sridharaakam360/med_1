@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>Create Bill</h2>
+    <form method="POST">
+        <input type="text" name="customer_name" placeholder="Customer Name" required>
+        <div id="bill-items">
+            <div class="bill-item">
+                <select name="items[]" required>
+                    <option value="">Select Product</option>
+                    {% for product in products %}
+                        <option value="{{ product[0] }}">{{ product[1] }} - ₹{{ product[2] }} (Stock: {{ product[3] }})</option>
+                    {% endfor %}
+                </select>
+                <input type="number" name="quantities[]" min="1" placeholder="Quantity" required>
+            </div>
+        </div>
+        <button type="button" id="add-item">Add Another Item</button>
+        <button type="submit">Generate Bill</button>
+    </form>
+{% endblock %}

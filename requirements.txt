@@ -1,6 +1,1 @@
-flask
-gunicorn
-sqlalchemy
-flask_sqlalchemy
-jinja2
-reportlab
+Flask==2.3.3
