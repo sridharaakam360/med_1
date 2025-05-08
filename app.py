@@ -77,7 +77,7 @@ def get_db_connection():
         logger.error(f"Error connecting to database: {e}")
         raise
 
-@app plunging.route('/')
+@app.route('/')  # Fixed the typo by removing 'plunging'
 def index():
     return render_template('index.html')
 
