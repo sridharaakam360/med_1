@@ -1,33 +1,30 @@
-# Stage 1: Build the application
-FROM python:3.9-slim AS builder
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements file first to leverage Docker cache
-COPY requirements.txt .
-
-# Install dependencies in a virtual environment
-RUN pip install --user --no-cache-dir -r requirements.txt
-
-# Stage 2: Create the runtime image
+# Use the official Python 3.9 slim image as the base
 FROM python:3.9-slim
 
 # Set working directory
 WORKDIR /app
 
+# Install system dependencies (if needed, e.g., for SQLite)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Copy installed dependencies from the builder stage
-COPY --from=builder /root/.local /home/appuser/.local
+# Copy requirements file first to leverage Docker cache
+COPY requirements.txt .
+
+# Install dependencies directly (no virtualenv, since we're in a container)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Verify gunicorn is installed
+RUN pip show gunicorn || { echo "gunicorn not installed"; exit 1; }
+RUN which gunicorn || { echo "gunicorn executable not found"; exit 1; }
 
 # Copy the rest of the application code
 COPY . .
-
-# Ensure the virtual environment is in the PATH
-ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Create database directory
 RUN mkdir -p /app/database
