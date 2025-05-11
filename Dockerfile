@@ -4,38 +4,31 @@ FROM python:3.9-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (if needed, e.g., for SQLite)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
-
-# Set environment variables, including PATH so gunicorn can be found
-ENV PATH="/home/appuser/.local/bin:${PATH}"
+# Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_ENV=production
 ENV PORT=5000
+# Set a fixed SECRET_KEY for production (replace with your own secret in production)
+ENV SECRET_KEY="51f52814d7bb5d8d7cb5ec61a9b05f237c6ca5f87cc21cdd"
 
 # Copy requirements file first to leverage Docker cache
 COPY requirements.txt .
 
-# Install dependencies directly (no virtualenv, since we're in a container)
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Verify gunicorn is installed
-RUN pip show gunicorn || { echo "gunicorn not installed"; exit 1; }
-RUN which gunicorn || { echo "gunicorn executable not found"; exit 1; }
 
 # Copy the rest of the application code
 COPY . .
 
-# Create database directory
-RUN mkdir -p /app/database
+# Create database directory with proper permissions
+RUN mkdir -p /app/database && chmod 777 /app/database
+RUN mkdir -p /app/instance && chmod 777 /app/instance
 
 # Expose the port the app runs on
 EXPOSE 5000

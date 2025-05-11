@@ -2,7 +2,7 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_wtf.csrf import CSRFProtect
 from wtforms import StringField, IntegerField, FloatField, DateField, SelectField
 from wtforms.validators import DataRequired, NumberRange
@@ -21,8 +21,16 @@ logger.addHandler(handler)
 app = Flask(__name__)
 
 # Load configuration from environment variables
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24).hex())
+# Use a fixed secret key in production for stable sessions
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+if not app.config['SECRET_KEY']:
+    app.config['SECRET_KEY'] = '51f52814d7bb5d8d7cb5ec61a9b05f237c6ca5f87cc21cdd'  # Fallback, change in production
+    logger.warning("Using fallback SECRET_KEY. Set a proper SECRET_KEY in environment variables.")
+
+# Ensure sessions persist by setting the session type
+app.config['SESSION_TYPE'] = 'filesystem'
 app.config['WTF_CSRF_ENABLED'] = True
+app.config['WTF_CSRF_TIME_LIMIT'] = None  # No time limit for CSRF tokens
 
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
@@ -417,6 +425,16 @@ def delete_supplier(supplier_id):
         logger.error(f"Error deleting supplier: {e}")
         flash('An error occurred while deleting the supplier.', 'error')
     return redirect(url_for('suppliers'))
+
+# Error handler for CSRF errors
+@app.errorhandler(400)
+def handle_csrf_error(e):
+    """Handle CSRF errors by flashing a message and redirecting."""
+    if 'csrf' in str(e).lower():
+        logger.warning(f"CSRF error: {e}")
+        flash('Your session has expired. Please try again.', 'error')
+        return redirect(url_for('index'))
+    return e
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

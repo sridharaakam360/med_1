@@ -3,3 +3,4 @@ gunicorn==22.0.0
 flask-wtf==1.2.1
 wtforms==3.1.2
 werkzeug==3.0.1
+flask-session==0.5.0
