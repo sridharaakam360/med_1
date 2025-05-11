@@ -1,21 +1,121 @@
 {% extends 'base.html' %}
 
+{% block title %}Billing{% endblock %}
+
 {% block content %}
-    <h2>Create Bill</h2>
-    <form method="POST">
-        <input type="text" name="customer_name" placeholder="Customer Name" required>
-        <div id="bill-items">
-            <div class="bill-item">
-                <select name="items[]" required>
-                    <option value="">Select Product</option>
-                    {% for product in products %}
-                        <option value="{{ product[0] }}">{{ product[1] }} - ₹{{ product[2] }} (Stock: {{ product[3] }})</option>
-                    {% endfor %}
-                </select>
-                <input type="number" name="quantities[]" min="1" placeholder="Quantity" required>
+    <section class="billing-section">
+        <h2>Create Bill</h2>
+        <form method="POST" id="billing-form">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                <label for="customer_name">Customer Name</label>
+                <input type="text" id="customer_name" name="customer_name" value="{{ form.customer_name.data or '' }}" required aria-describedby="customer-name-help">
+                <small id="customer-name-help" class="form-text">Enter the customer's name.</small>
+                {% if form.customer_name.errors %}
+                    <ul class="errors">
+                        {% for error in form.customer_name.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
             </div>
-        </div>
-        <button type="button" id="add-item">Add Another Item</button>
-        <button type="submit">Generate Bill</button>
-    </form>
+            <div id="bill-items">
+                <div class="bill-item">
+                    <div class="form-group">
+                        <label for="items-0">Product</label>
+                        <select name="items[]" id="items-0" required>
+                            <option value="">Select Product</option>
+                            {% for product in products %}
+                                <option value="{{ product[0] }}">{{ product[1] }} - ₹{{ product[2] }} (Stock: {{ product[3] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quantities-0">Quantity</label>
+                        <input type="number" name="quantities[]" id="quantities-0" min="1" required>
+                        <button type="button" class="remove-item-btn" style="display: none;">Remove</button>
+                    </div>
+                </div>
+            </div>
+            <button type="button" id="add-item" class="btn btn-secondary">Add Another Item</button>
+            <div class="bill-summary">
+                <h3>Bill Summary</h3>
+                <p>Total Amount: ₹<span id="total-amount">0.00</span></p>
+            </div>
+            <button type="submit" class="btn btn-primary">Generate Bill</button>
+        </form>
+    </section>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let itemCount = 1;
+            const billItems = document.getElementById('bill-items');
+            const addItemBtn = document.getElementById('add-item');
+            const products = {{ products | tojson }};
+
+            function calculateTotal() {
+                let total = 0;
+                const items = billItems.querySelectorAll('.bill-item');
+                items.forEach((item, index) => {
+                    const productId = item.querySelector(`#items-${index}`).value;
+                    const quantity = parseInt(item.querySelector(`#quantities-${index}`).value) || 0;
+                    const product = products.find(p => p[0] == productId);
+                    if (product) {
+                        total += product[2] * quantity;
+                    }
+                });
+                document.getElementById('total-amount').textContent = total.toFixed(2);
+            }
+
+            addItemBtn.addEventListener('click', () => {
+                const newItem = document.createElement('div');
+                newItem.classList.add('bill-item');
+                newItem.innerHTML = `
+                    <div class="form-group">
+                        <label for="items-${itemCount}">Product</label>
+                        <select name="items[]" id="items-${itemCount}" required>
+                            <option value="">Select Product</option>
+                            {% for product in products %}
+                                <option value="{{ product[0] }}">{{ product[1] }} - ₹{{ product[2] }} (Stock: {{ product[3] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quantities-${itemCount}">Quantity</label>
+                        <input type="number" name="quantities[]" id="quantities-${itemCount}" min="1" required>
+                        <button type="button" class="remove-item-btn">Remove</button>
+                    </div>
+                `;
+                billItems.appendChild(newItem);
+                itemCount++;
+                updateRemoveButtons();
+                calculateTotal();
+            });
+
+            billItems.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-item-btn')) {
+                    e.target.parentElement.parentElement.remove();
+                    itemCount--;
+                    updateRemoveButtons();
+                    calculateTotal();
+                }
+            });
+
+            billItems.addEventListener('change', (e) => {
+                if (e.target.name === 'items[]' || e.target.name === 'quantities[]') {
+                    calculateTotal();
+                }
+            });
+
+            function updateRemoveButtons() {
+                const items = billItems.querySelectorAll('.bill-item');
+                items.forEach((item, index) => {
+                    const removeBtn = item.querySelector('.remove-item-btn');
+                    removeBtn.style.display = index === 0 && items.length === 1 ? 'none' : 'inline-block';
+                });
+            }
+
+            // Initial calculation
+            calculateTotal();
+        });
+    </script>
 {% endblock %}

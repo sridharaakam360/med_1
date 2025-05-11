@@ -3,32 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Medical Shop Management System - Manage billing, inventory, expiry alerts, and suppliers.">
+    <meta name="keywords" content="medical shop, pharmacy management, billing, inventory, expiry alerts, suppliers">
+    <meta name="author" content="Medical Shop App">
     <title>Medical Shop - {% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
 <body>
     <header>
         <h1>Medical Shop Management</h1>
-        <nav>
-            <a href="{{ url_for('index') }}">Home</a> |
-            <a href="{{ url_for('billing') }}">Billing</a> |
-            <a href="{{ url_for('inventory') }}">Inventory</a> |
-            <a href="{{ url_for('expiry') }}">Expiry Alerts</a> |
-            <a href="{{ url_for('suppliers') }}">Suppliers</a>
+        <nav aria-label="Main navigation">
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a></li>
+                <li><a href="{{ url_for('billing') }}" {% if request.endpoint == 'billing' %}aria-current="page"{% endif %}>Billing</a></li>
+                <li><a href="{{ url_for('bill_history') }}" {% if request.endpoint == 'bill_history' %}aria-current="page"{% endif %}>Bill History</a></li>
+                <li><a href="{{ url_for('inventory') }}" {% if request.endpoint == 'inventory' %}aria-current="page"{% endif %}>Inventory</a></li>
+                <li><a href="{{ url_for('expiry') }}" {% if request.endpoint == 'expiry' %}aria-current="page"{% endif %}>Expiry Alerts</a></li>
+                <li><a href="{{ url_for('suppliers') }}" {% if request.endpoint == 'suppliers' %}aria-current="page"{% endif %}>Suppliers</a></li>
+            </ul>
         </nav>
     </header>
     <main>
-        {% with messages = get_flashed_messages() %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <ul>
-                    {% for message in messages %}
-                        <li>{{ message }}</li>
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <p class="flash-message {{ category }}">{{ message }}</p>
                     {% endfor %}
-                </ul>
+                </div>
             {% endif %}
         {% endwith %}
         {% block content %}
         {% endblock %}
     </main>
+    <footer>
+        <p>© 2025 Medical Shop Management. All rights reserved.</p>
+    </footer>
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
 </body>
 </html>
