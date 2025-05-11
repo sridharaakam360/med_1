@@ -219,34 +219,62 @@ def bill_history():
     """Display all past bills."""
     try:
         with get_db_connection() as conn:
+            # Set row_factory to handle SQLite rows as dictionaries
+            conn.row_factory = sqlite3.Row
             c = conn.cursor()
-            c.execute('''SELECT b.id, b.customer_name, b.total_amount, b.bill_date,
-                         bi.product_id, bi.quantity, p.name, p.price
-                         FROM bills b
-                         LEFT JOIN bill_items bi ON b.id = bi.bill_id
-                         LEFT JOIN products p ON bi.product_id = p.id
-                         ORDER BY b.bill_date DESC''')
-            bills = c.fetchall()
-            # Group bills by bill_id for easier rendering
-            bill_dict = {}
-            for bill in bills:
-                bill_id = bill[0]
-                if bill_id not in bill_dict:
-                    bill_dict[bill_id] = {
-                        'customer_name': bill[1],
-                        'total_amount': bill[2],
-                        'bill_date': bill[3],
-                        'items': []
-                    }
-                if bill[4]:  # If there's a bill item
-                    bill_dict[bill_id]['items'].append({
-                        'product_name': bill[6],
-                        'quantity': bill[5],
-                        'price': bill[7]
-                    })
-            return render_template('bill_history.html', bills=bill_dict.values())
+            
+            # First get all bills
+            c.execute('''SELECT id, customer_name, total_amount, bill_date
+                         FROM bills
+                         ORDER BY bill_date DESC''')
+            bills_data = c.fetchall()
+            
+            # Create a dictionary to store bill information
+            bills_dict = {}
+            
+            # Process each bill
+            for bill in bills_data:
+                bill_id = bill['id']
+                bills_dict[bill_id] = {
+                    'customer_name': bill['customer_name'],
+                    'total_amount': bill['total_amount'],
+                    'bill_date': bill['bill_date'],
+                    'items': []
+                }
+            
+            # If we have bills, get their items
+            if bills_dict:
+                # Get all bill items with product details
+                bill_ids = tuple(bills_dict.keys())
+                
+                # Handle case with only one bill
+                if len(bill_ids) == 1:
+                    c.execute('''SELECT bi.bill_id, bi.quantity, p.name, p.price
+                               FROM bill_items bi
+                               JOIN products p ON bi.product_id = p.id
+                               WHERE bi.bill_id = ?''', (bill_ids[0],))
+                else:
+                    c.execute('''SELECT bi.bill_id, bi.quantity, p.name, p.price
+                               FROM bill_items bi
+                               JOIN products p ON bi.product_id = p.id
+                               WHERE bi.bill_id IN {}'''.format(bill_ids))
+                
+                items_data = c.fetchall()
+                
+                # Add items to their respective bills
+                for item in items_data:
+                    bill_id = item['bill_id']
+                    if bill_id in bills_dict:
+                        bills_dict[bill_id]['items'].append({
+                            'product_name': item['name'],
+                            'quantity': item['quantity'],
+                            'price': item['price']
+                        })
+            
+            logger.debug(f"Successfully fetched {len(bills_dict)} bills")
+            return render_template('bill_history.html', bills=bills_dict.values())
     except Exception as e:
-        logger.error(f"Error fetching bill history: {e}")
+        logger.error(f"Error fetching bill history: {e}", exc_info=True)
         flash('An error occurred while fetching bill history.', 'error')
         return redirect(url_for('index'))
 

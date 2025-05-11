@@ -10,7 +10,7 @@
                 <caption id="bill-history-desc">A list of all past bills with their details.</caption>
                 <thead>
                     <tr>
-                        <th scope="col">Bill ID</th>
+                        <th scope="col">Bill #</th>
                         <th scope="col">Customer Name</th>
                         <th scope="col">Total Amount</th>
                         <th scope="col">Bill Date</th>
@@ -22,10 +22,14 @@
                         <tr>
                             <td>{{ loop.index }}</td>
                             <td>{{ bill.customer_name }}</td>
-                            <td>₹{{ bill.total_amount | round(2) }}</td>
+                            <td>₹{{ "%.2f"|format(bill.total_amount) }}</td>
                             <td>{{ bill.bill_date }}</td>
                             <td>
-                                <button class="btn btn-details" type="button" data-toggle="collapse" data-target="#bill-details-{{ loop.index }}" aria-expanded="false" aria-controls="bill-details-{{ loop.index }}">
+                                <button class="btn btn-details" type="button" 
+                                        data-toggle="collapse" 
+                                        data-target="#bill-details-{{ loop.index }}" 
+                                        aria-expanded="false" 
+                                        aria-controls="bill-details-{{ loop.index }}">
                                     View Items
                                 </button>
                             </td>
@@ -49,8 +53,8 @@
                                                     <tr>
                                                         <td>{{ item.product_name }}</td>
                                                         <td>{{ item.quantity }}</td>
-                                                        <td>₹{{ item.price | round(2) }}</td>
-                                                        <td>₹{{ (item.price * item.quantity) | round(2) }}</td>
+                                                        <td>₹{{ "%.2f"|format(item.price) }}</td>
+                                                        <td>₹{{ "%.2f"|format(item.price * item.quantity) }}</td>
                                                     </tr>
                                                 {% endfor %}
                                             </tbody>
@@ -65,21 +69,31 @@
                 </tbody>
             </table>
         {% else %}
-            <p>No bills found.</p>
+            <p class="no-data">No bills found.</p>
         {% endif %}
         <a href="{{ url_for('billing') }}" class="btn btn-secondary">Back to Billing</a>
     </section>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Add interactivity for collapse buttons if needed
+            // Add interactivity for collapse buttons
             const buttons = document.querySelectorAll('[data-toggle="collapse"]');
             buttons.forEach(button => {
                 button.addEventListener('click', () => {
                     const targetId = button.getAttribute('data-target');
                     const target = document.querySelector(targetId);
                     const isExpanded = button.getAttribute('aria-expanded') === 'true';
+                    
+                    // Toggle aria-expanded attribute
                     button.setAttribute('aria-expanded', !isExpanded);
-                    target.classList.toggle('collapse');
+                    
+                    // Toggle collapse class
+                    if (target.classList.contains('collapse')) {
+                        target.classList.remove('collapse');
+                        target.classList.add('show');
+                    } else {
+                        target.classList.add('collapse');
+                        target.classList.remove('show');
+                    }
                 });
             });
         });
