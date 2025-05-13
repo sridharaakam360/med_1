@@ -6,40 +6,141 @@
     <meta name="description" content="Medical Shop Management System - Manage billing, inventory, expiry alerts, and suppliers.">
     <meta name="keywords" content="medical shop, pharmacy management, billing, inventory, expiry alerts, suppliers">
     <meta name="author" content="Medical Shop App">
-    <title>Medical Shop - {% block title %}{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <title>{% block title %}Medical Shop Management{% endblock %}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background-color: #343a40;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            text-decoration: none;
+            padding: 10px 15px;
+            display: block;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar .active {
+            background-color: #0d6efd;
+        }
+        .main-content {
+            padding: 20px;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <header>
-        <h1>Medical Shop Management</h1>
-        <nav aria-label="Main navigation">
-            <ul class="nav-links">
-                <li><a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a></li>
-                <li><a href="{{ url_for('billing') }}" {% if request.endpoint == 'billing' %}aria-current="page"{% endif %}>Billing</a></li>
-                <li><a href="{{ url_for('bill_history') }}" {% if request.endpoint == 'bill_history' %}aria-current="page"{% endif %}>Bill History</a></li>
-                <li><a href="{{ url_for('inventory') }}" {% if request.endpoint == 'inventory' %}aria-current="page"{% endif %}>Inventory</a></li>
-                <li><a href="{{ url_for('expiry') }}" {% if request.endpoint == 'expiry' %}aria-current="page"{% endif %}>Expiry Alerts</a></li>
-                <li><a href="{{ url_for('suppliers') }}" {% if request.endpoint == 'suppliers' %}aria-current="page"{% endif %}>Suppliers</a></li>
-            </ul>
-        </nav>
-    </header>
-    <main>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="flash-messages">
-                    {% for category, message in messages %}
-                        <p class="flash-message {{ category }}">{{ message }}</p>
-                    {% endfor %}
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fas fa-clinic-medical"></i> Medical Shop
+            </a>
+            {% if session.get('user_id') %}
+            <div class="d-flex">
+                <div class="dropdown">
+                    <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown">
+                        <i class="fas fa-user"></i> {{ session.get('username') }}
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('profile') }}">
+                            <i class="fas fa-id-card"></i> Profile
+                        </a></li>
+                        {% if session.get('user_role') == 'admin' %}
+                        <li><a class="dropdown-item" href="{{ url_for('users') }}">
+                            <i class="fas fa-users"></i> Manage Users
+                        </a></li>
+                        {% endif %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a></li>
+                    </ul>
                 </div>
+            </div>
             {% endif %}
-        {% endwith %}
-        {% block content %}
-        {% endblock %}
-    </main>
-    <footer>
-        <p>© 2025 Medical Shop Management. All rights reserved.</p>
-    </footer>
-    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            {% if session.get('user_id') %}
+            <!-- Sidebar -->
+            <div class="col-md-2 sidebar">
+                <nav>
+                    <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">
+                        <i class="fas fa-chart-line"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('billing') }}" class="{{ 'active' if request.endpoint == 'billing' }}">
+                        <i class="fas fa-cash-register"></i> Billing
+                    </a>
+                    <a href="{{ url_for('bill_history') }}" class="{{ 'active' if request.endpoint == 'bill_history' }}">
+                        <i class="fas fa-history"></i> Bill History
+                    </a>
+                    <a href="{{ url_for('inventory') }}" class="{{ 'active' if request.endpoint == 'inventory' }}">
+                        <i class="fas fa-boxes"></i> Inventory
+                    </a>
+                    <a href="{{ url_for('suppliers') }}" class="{{ 'active' if request.endpoint == 'suppliers' }}">
+                        <i class="fas fa-truck"></i> Suppliers
+                    </a>
+                    <a href="{{ url_for('expiry') }}" class="{{ 'active' if request.endpoint == 'expiry' }}">
+                        <i class="fas fa-calendar-times"></i> Expiry Check
+                    </a>
+                </nav>
+            </div>
+            <!-- Main Content -->
+            <div class="col-md-10 main-content">
+            {% else %}
+            <div class="col-12 main-content">
+            {% endif %}
+                <!-- Flash Messages -->
+                <div class="alert-container">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+                
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% block extra_js %}{% endblock %}
+    
+    <script>
+        // Auto-hide alerts after 5 seconds
+        $(document).ready(function() {
+            setTimeout(function() {
+                $('.alert').alert('close');
+            }, 5000);
+        });
+    </script>
 </body>
 </html>
