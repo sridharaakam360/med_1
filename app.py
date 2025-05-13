@@ -22,16 +22,10 @@ logger.addHandler(handler)
 app = Flask(__name__)
 
 # Load configuration from environment variables
-# Use a fixed secret key in production for stable sessions
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-if not app.config['SECRET_KEY']:
-    app.config['SECRET_KEY'] = '51f52814d7bb5d8d7cb5ec61a9b05f237c6ca5f87cc21cdd'  # Fallback, change in production
-    logger.warning("Using fallback SECRET_KEY. Set a proper SECRET_KEY in environment variables.")
-
-# Ensure sessions persist by setting the session type
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '51f52814d7bb5d8d7cb5ec61a9b05f237c6ca5f87cc21cdd')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['WTF_CSRF_ENABLED'] = True
-app.config['WTF_CSRF_TIME_LIMIT'] = None  # No time limit for CSRF tokens
+app.config['WTF_CSRF_TIME_LIMIT'] = None
 
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
@@ -41,6 +35,49 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_DIR = os.path.join(BASE_DIR, 'database')
 DB_PATH = os.environ.get('DB_PATH', os.path.join(DB_DIR, 'medical_shop.db'))
 
+# Authentication decorators
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'error')
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_role' not in session or session['user_role'] != 'admin':
+            flash('You need admin privileges to access this page.', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def log_activity(user_id, action, details=None):
+    """Log user activity to the database."""
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            c.execute('INSERT INTO activity_logs (user_id, action, details, timestamp) VALUES (?, ?, ?, ?)',
+                     (user_id, action, details, now))
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error logging activity: {e}")
+
+def get_db_connection():
+    """Get a database connection with foreign keys enabled."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute('PRAGMA foreign_keys = ON')
+        conn.row_factory = sqlite3.Row
+        logger.debug("Database connection established")
+        return conn
+    except Exception as e:
+        logger.error(f"Error connecting to database: {e}")
+        raise
+
 def init_db():
     """Initialize the SQLite database and create necessary tables."""
     try:
@@ -48,20 +85,7 @@ def init_db():
             os.makedirs(DB_DIR)
             logger.debug(f"Created database directory: {DB_DIR}")
 
-        if os.path.exists(DB_PATH):
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    c = conn.cursor()
-                    c.execute('SELECT 1')
-                    logger.debug(f"Existing database file is valid: {DB_PATH}")
-            except sqlite3.DatabaseError as e:
-                logger.warning(f"Invalid database file: {e}. Recreating.")
-                os.remove(DB_PATH)
-        else:
-            logger.debug(f"Creating new database at {DB_PATH}")
-
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute('PRAGMA foreign_keys = ON')
+        with get_db_connection() as conn:
             c = conn.cursor()
             
             # Create users table
@@ -134,25 +158,19 @@ def init_db():
             if c.fetchone()[0] == 0:
                 admin_password = generate_password_hash('admin123')  # Change this in production
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                c.execute('INSERT INTO users (username, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)',
-                         ('admin', 'admin@example.com', admin_password, 'admin', now))
-                logger.info("Created default admin user")
+                try:
+                    c.execute('INSERT INTO users (username, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)',
+                             ('admin', 'admin@example.com', admin_password, 'admin', now))
+                    conn.commit()
+                    logger.info("Created default admin user")
+                except sqlite3.IntegrityError:
+                    logger.info("Default admin user already exists")
+                    conn.rollback()
             
             conn.commit()
             logger.debug(f"Database initialized at {DB_PATH}")
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
-        raise
-
-def get_db_connection():
-    """Get a database connection with foreign keys enabled."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute('PRAGMA foreign_keys = ON')
-        logger.debug("Database connection established")
-        return conn
-    except Exception as e:
-        logger.error(f"Error connecting to database: {e}")
         raise
 
 # Initialize database
@@ -555,36 +573,6 @@ def handle_csrf_error(e):
         flash('Your session has expired. Please try again.', 'error')
         return redirect(url_for('index'))
     return e
-
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please log in to access this page.', 'error')
-            return redirect(url_for('login', next=request.url))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_role' not in session or session['user_role'] != 'admin':
-            flash('You need admin privileges to access this page.', 'error')
-            return redirect(url_for('index'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def log_activity(user_id, action, details=None):
-    """Log user activity to the database."""
-    try:
-        with get_db_connection() as conn:
-            c = conn.cursor()
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            c.execute('INSERT INTO activity_logs (user_id, action, details, timestamp) VALUES (?, ?, ?, ?)',
-                     (user_id, action, details, now))
-            conn.commit()
-    except Exception as e:
-        logger.error(f"Error logging activity: {e}")
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
