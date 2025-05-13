@@ -207,6 +207,11 @@ class RegisterForm(FlaskForm):
         EqualTo('password', message='Passwords must match')
     ])
 
+class EditUserForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    email = EmailField('Email', validators=[DataRequired(), Email()])
+    role = SelectField('Role', choices=[('staff', 'Staff'), ('admin', 'Admin')], validators=[DataRequired()])
+
 @app.route('/')
 @login_required
 def index():
@@ -256,6 +261,7 @@ def billing():
     """Handle billing: display products and process bill creation."""
     form = BillingForm()
     today = datetime.now().strftime('%Y-%m-%d')
+    
     if request.method == 'POST' and form.validate_on_submit():
         try:
             with get_db_connection() as conn:
@@ -271,113 +277,157 @@ def billing():
                     flash('Invalid items or quantities provided.', 'error')
                     return redirect(url_for('billing'))
 
-                # Create bill
-                c.execute('INSERT INTO bills (customer_name, total_amount, bill_date) VALUES (?, ?, ?)',
-                          (customer_name, 0, bill_date))
-                bill_id = c.lastrowid
+                # Start transaction
+                try:
+                    # Create bill
+                    c.execute('''INSERT INTO bills 
+                               (customer_name, total_amount, bill_date, created_by) 
+                               VALUES (?, ?, ?, ?)''',
+                             (customer_name, 0, bill_date, session['user_id']))
+                    bill_id = c.lastrowid
 
-                # Process items
-                for prod_id, qty in zip(items, quantities):
-                    try:
-                        qty = int(qty)
-                        if qty <= 0:
-                            flash(f"Quantity must be positive for product ID {prod_id}.", 'error')
-                            continue
-                        c.execute('SELECT price, quantity FROM products WHERE id = ?', (prod_id,))
-                        product = c.fetchone()
-                        if not product:
-                            flash(f"Product ID {prod_id} not found.", 'error')
-                            continue
-                        if product[1] < qty:
-                            flash(f"Not enough stock for product ID {prod_id}. Available: {product[1]}.", 'error')
-                            continue
-                        price = product[0]
-                        total_amount += price * qty
-                        c.execute('UPDATE products SET quantity = quantity - ? WHERE id = ?', (qty, prod_id))
-                        c.execute('INSERT INTO bill_items (bill_id, product_id, quantity) VALUES (?, ?, ?)',
-                                  (bill_id, prod_id, qty))
-                    except ValueError:
-                        flash(f"Invalid quantity for product ID {prod_id}.", 'error')
-                        continue
+                    # Process items
+                    for prod_id, qty in zip(items, quantities):
+                        try:
+                            qty = int(qty)
+                            if qty <= 0:
+                                raise ValueError(f"Invalid quantity for product ID {prod_id}")
 
-                # Update total amount
-                c.execute('UPDATE bills SET total_amount = ? WHERE id = ?', (total_amount, bill_id))
-                conn.commit()
-                flash('Bill created successfully!', 'success')
-                return redirect(url_for('billing'))
+                            # Get product details and check stock
+                            c.execute('SELECT price, quantity FROM products WHERE id = ?', (prod_id,))
+                            product = c.fetchone()
+                            if not product:
+                                raise ValueError(f"Product ID {prod_id} not found")
+                            
+                            if product['quantity'] < qty:
+                                raise ValueError(f"Not enough stock for product ID {prod_id}. Available: {product['quantity']}")
+
+                            price = product['price']
+                            item_total = price * qty
+                            total_amount += item_total
+
+                            # Update product quantity
+                            c.execute('UPDATE products SET quantity = quantity - ? WHERE id = ?', (qty, prod_id))
+                            
+                            # Add bill item
+                            c.execute('''INSERT INTO bill_items 
+                                       (bill_id, product_id, quantity, unit_price) 
+                                       VALUES (?, ?, ?, ?)''',
+                                     (bill_id, prod_id, qty, price))
+
+                        except ValueError as ve:
+                            # Rollback and report error
+                            conn.rollback()
+                            flash(str(ve), 'error')
+                            return redirect(url_for('billing'))
+
+                    # Update bill total
+                    c.execute('UPDATE bills SET total_amount = ? WHERE id = ?', (total_amount, bill_id))
+                    conn.commit()
+
+                    log_activity(session['user_id'], 'bill_created', f"Created bill #{bill_id}")
+                    flash('Bill created successfully!', 'success')
+                    return redirect(url_for('bill_history'))
+
+                except Exception as e:
+                    conn.rollback()
+                    logger.error(f"Error processing bill: {e}")
+                    flash('An error occurred while processing the bill.', 'error')
+                    return redirect(url_for('billing'))
+
         except Exception as e:
-            logger.error(f"Error creating bill: {e}")
-            flash('An error occurred while creating the bill.', 'error')
+            logger.error(f"Error in billing: {e}")
+            flash('An error occurred while processing the bill.', 'error')
             return redirect(url_for('billing'))
 
-    with get_db_connection() as conn:
-        c = conn.cursor()
-        c.execute('SELECT id, name, price, quantity FROM products WHERE quantity > 0')
-        products = c.fetchall()
-    return render_template('billing.html', form=form, products=products, today=today)
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            c.execute('''SELECT id, name, price, quantity 
+                        FROM products 
+                        WHERE quantity > 0 
+                        AND expiry_date > ?''', (today,))
+            products = c.fetchall()
+        return render_template('billing.html', form=form, products=products, today=today)
+    except Exception as e:
+        logger.error(f"Error fetching products for billing: {e}")
+        flash('An error occurred while loading products.', 'error')
+        return redirect(url_for('index'))
 
 @app.route('/bill_history')
 @login_required
 def bill_history():
     """Display all past bills."""
     try:
+        page = request.args.get('page', 1, type=int)
+        per_page = 10  # Number of bills per page
+        
         with get_db_connection() as conn:
-            # Set row_factory to handle SQLite rows as dictionaries
-            conn.row_factory = sqlite3.Row
             c = conn.cursor()
             
-            # First get all bills
-            c.execute('''SELECT id, customer_name, total_amount, bill_date
-                         FROM bills
-                         ORDER BY bill_date DESC''')
-            bills_data = c.fetchall()
+            # Get total number of bills
+            c.execute('SELECT COUNT(*) FROM bills')
+            total_bills = c.fetchone()[0]
             
-            # Create a dictionary to store bill information
+            # Calculate pagination
+            total_pages = (total_bills + per_page - 1) // per_page
+            offset = (page - 1) * per_page
+            
+            # Get bills for current page
+            c.execute('''SELECT b.id, b.customer_name, b.total_amount, b.bill_date,
+                               u.username as created_by
+                        FROM bills b
+                        LEFT JOIN users u ON b.created_by = u.id
+                        ORDER BY b.bill_date DESC
+                        LIMIT ? OFFSET ?''', (per_page, offset))
+            bills = c.fetchall()
+            
+            # Get items for these bills
             bills_dict = {}
-            
-            # Process each bill
-            for bill in bills_data:
-                bill_id = bill['id']
-                bills_dict[bill_id] = {
-                    'customer_name': bill['customer_name'],
-                    'total_amount': bill['total_amount'],
-                    'bill_date': bill['bill_date'],
-                    'items': []
-                }
-            
-            # If we have bills, get their items
-            if bills_dict:
-                # Get all bill items with product details
-                bill_ids = tuple(bills_dict.keys())
+            if bills:
+                for bill in bills:
+                    bill_id = bill['id']
+                    bills_dict[bill_id] = {
+                        'id': bill_id,
+                        'customer_name': bill['customer_name'],
+                        'total_amount': bill['total_amount'],
+                        'bill_date': bill['bill_date'],
+                        'created_by': bill['created_by'],
+                        'items': []
+                    }
                 
-                # Handle case with only one bill
+                # Get all items for these bills
+                bill_ids = tuple(bills_dict.keys())
                 if len(bill_ids) == 1:
-                    c.execute('''SELECT bi.bill_id, bi.quantity, p.name, p.price
+                    c.execute('''SELECT bi.bill_id, bi.quantity, bi.unit_price,
+                                      p.name as product_name
                                FROM bill_items bi
                                JOIN products p ON bi.product_id = p.id
                                WHERE bi.bill_id = ?''', (bill_ids[0],))
                 else:
-                    c.execute('''SELECT bi.bill_id, bi.quantity, p.name, p.price
+                    c.execute('''SELECT bi.bill_id, bi.quantity, bi.unit_price,
+                                      p.name as product_name
                                FROM bill_items bi
                                JOIN products p ON bi.product_id = p.id
                                WHERE bi.bill_id IN {}'''.format(bill_ids))
                 
-                items_data = c.fetchall()
-                
-                # Add items to their respective bills
-                for item in items_data:
+                items = c.fetchall()
+                for item in items:
                     bill_id = item['bill_id']
                     if bill_id in bills_dict:
                         bills_dict[bill_id]['items'].append({
-                            'product_name': item['name'],
+                            'product_name': item['product_name'],
                             'quantity': item['quantity'],
-                            'price': item['price']
+                            'unit_price': item['unit_price'],
+                            'total': item['quantity'] * item['unit_price']
                         })
             
-            logger.debug(f"Successfully fetched {len(bills_dict)} bills")
-            return render_template('bill_history.html', bills=bills_dict.values())
+        return render_template('bill_history.html',
+                             bills=bills_dict.values(),
+                             page=page,
+                             total_pages=total_pages)
     except Exception as e:
-        logger.error(f"Error fetching bill history: {e}", exc_info=True)
+        logger.error(f"Error fetching bill history: {e}")
         flash('An error occurred while fetching bill history.', 'error')
         return redirect(url_for('index'))
 
@@ -461,16 +511,39 @@ def edit_product(product_id):
 @login_required
 def delete_product(product_id):
     """Delete a product."""
+    if session.get('user_role') != 'admin':
+        flash('Only administrators can delete products.', 'error')
+        return redirect(url_for('inventory'))
+        
     try:
         with get_db_connection() as conn:
             c = conn.cursor()
+            
+            # Check if product exists
+            c.execute('SELECT name FROM products WHERE id = ?', (product_id,))
+            product = c.fetchone()
+            if not product:
+                flash('Product not found.', 'error')
+                return redirect(url_for('inventory'))
+            
+            # Check if product is used in any bills
+            c.execute('SELECT 1 FROM bill_items WHERE product_id = ?', (product_id,))
+            if c.fetchone():
+                flash('Cannot delete product as it is referenced in bills.', 'error')
+                return redirect(url_for('inventory'))
+            
+            # Delete product
             c.execute('DELETE FROM products WHERE id = ?', (product_id,))
             conn.commit()
+            
+            log_activity(session['user_id'], 'product_deleted', f"Deleted product: {product['name']}")
             flash('Product deleted successfully!', 'success')
+            
+        return redirect(url_for('inventory'))
     except Exception as e:
         logger.error(f"Error deleting product: {e}")
         flash('An error occurred while deleting the product.', 'error')
-    return redirect(url_for('inventory'))
+        return redirect(url_for('inventory'))
 
 @app.route('/expiry')
 @login_required
@@ -776,6 +849,57 @@ def delete_user(user_id):
     except Exception as e:
         logger.error(f"Error deleting user: {e}")
         flash('An error occurred while deleting the user.', 'error')
+        return redirect(url_for('users'))
+
+@app.route('/users/edit/<int:user_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_user(user_id):
+    """Edit a user (admin only)."""
+    form = EditUserForm()
+    
+    try:
+        with get_db_connection() as conn:
+            c = conn.cursor()
+            
+            if request.method == 'GET':
+                c.execute('SELECT username, email, role FROM users WHERE id = ?', (user_id,))
+                user = c.fetchone()
+                if not user:
+                    flash('User not found.', 'error')
+                    return redirect(url_for('users'))
+                
+                form.username.data = user['username']
+                form.email.data = user['email']
+                form.role.data = user['role']
+            
+            if form.validate_on_submit():
+                # Check if username exists for other users
+                c.execute('SELECT 1 FROM users WHERE username = ? AND id != ?', (form.username.data, user_id))
+                if c.fetchone():
+                    flash('Username already exists.', 'error')
+                    return render_template('edit_user.html', form=form, user_id=user_id)
+                
+                # Check if email exists for other users
+                c.execute('SELECT 1 FROM users WHERE email = ? AND id != ?', (form.email.data, user_id))
+                if c.fetchone():
+                    flash('Email already registered.', 'error')
+                    return render_template('edit_user.html', form=form, user_id=user_id)
+                
+                # Update user
+                c.execute('''UPDATE users 
+                           SET username = ?, email = ?, role = ?
+                           WHERE id = ?''',
+                         (form.username.data, form.email.data, form.role.data, user_id))
+                conn.commit()
+                
+                log_activity(session['user_id'], 'user_updated', f"Updated user: {form.username.data}")
+                flash('User updated successfully!', 'success')
+                return redirect(url_for('users'))
+                
+        return render_template('edit_user.html', form=form, user_id=user_id)
+    except Exception as e:
+        logger.error(f"Error editing user: {e}")
+        flash('An error occurred while editing the user.', 'error')
         return redirect(url_for('users'))
 
 if __name__ == '__main__':
