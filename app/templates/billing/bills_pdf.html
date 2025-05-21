@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bills Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .filter-info {
+            margin-bottom: 20px;
+            text-align: center;
+            color: #666;
+        }
+        .bill {
+            margin-bottom: 40px;
+            page-break-inside: avoid;
+        }
+        .bill-header {
+            background-color: #f5f5f5;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .customer-info {
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+        .total {
+            text-align: right;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Bills Report</h1>
+        <div class="filter-info">
+            {% if filter_type == 'custom' %}
+                Period: {{ start_date }} to {{ end_date }}
+            {% else %}
+                Filter: {{ filter_type|replace('_', ' ')|title }}
+            {% endif %}
+        </div>
+    </div>
+
+    {% for bill in bills %}
+    <div class="bill">
+        <div class="bill-header">
+            <h2>Bill #{{ bill.id }}</h2>
+            <p>Date: {{ bill.bill_date.strftime('%Y-%m-%d %H:%M') }}</p>
+        </div>
+
+        <div class="customer-info">
+            <p><strong>Customer:</strong> {{ bill.customer_name }}</p>
+            {% if bill.customer_phone %}
+            <p><strong>Phone:</strong> {{ bill.customer_phone }}</p>
+            {% endif %}
+            {% if bill.customer_email %}
+            <p><strong>Email:</strong> {{ bill.customer_email }}</p>
+            {% endif %}
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in bill.items %}
+                <tr>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>₹{{ "%.2f"|format(item.unit_price) }}</td>
+                    <td>₹{{ "%.2f"|format(item.quantity * item.unit_price) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="total">
+            <p>Total Amount: ₹{{ "%.2f"|format(bill.total_amount) }}</p>
+            <p>Payment Method: {{ bill.payment_method }}</p>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="footer">
+        <p>Generated on: {{ now().strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        <p>Total Bills: {{ bills|length }}</p>
+    </div>
+</body>
+</html> 

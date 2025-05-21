@@ -1,3 +1,5 @@
-2025-05-13 20:15:55,026 - DEBUG - Database connection established
-2025-05-13 20:15:55,309 - INFO - Created default admin user
-2025-05-13 20:15:55,309 - DEBUG - Database initialized at C:\Users\mukes\Desktop\med_1\database\medical_shop.db
+2025-05-20 23:31:41,698 - DEBUG - Database initialized at c:\Users\mukes\Desktop\med_1\database\medical_shop.db
+2025-05-20 23:41:18,935 - INFO - Created default admin user
+2025-05-20 23:41:18,936 - DEBUG - Database initialized successfully
+2025-05-20 23:42:01,942 - DEBUG - Database initialized successfully
+2025-05-20 23:42:14,119 - ERROR - Login error: Not all parameters were used in the SQL statement

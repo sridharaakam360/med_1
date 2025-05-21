@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}New Bill{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">New Bill</h1>
+        <a href="{{ url_for('billing.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Bills
+        </a>
+    </div>
+
+    <!-- Products (moved up) -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Products</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <input type="text" id="productSearch" class="form-control" placeholder="Search products...">
+                        <button type="button" class="btn btn-primary" onclick="searchProducts()">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                    </div>
+                    <div id="searchResults" class="list-group mt-2" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table" id="billItems">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Items will be added here dynamically -->
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="text-end"><strong>Total Amount:</strong></td>
+                            <td colspan="2">
+                                <strong>₹<span id="totalAmount">0.00</span></strong>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Information (moved down) -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Customer Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        {{ form.customer_name.label(class="form-label") }}
+                        {{ form.customer_name(class="form-control") }}
+                        {% if form.customer_name.errors %}
+                        <div class="text-danger">
+                            {% for error in form.customer_name.errors %}
+                            <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        {{ form.customer_phone.label(class="form-label") }}
+                        {{ form.customer_phone(class="form-control") }}
+                        {% if form.customer_phone.errors %}
+                        <div class="text-danger">
+                            {% for error in form.customer_phone.errors %}
+                            <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        {{ form.customer_email.label(class="form-label") }}
+                        {{ form.customer_email(class="form-control") }}
+                        {% if form.customer_email.errors %}
+                        <div class="text-danger">
+                            {% for error in form.customer_email.errors %}
+                            <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Information -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Payment Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        {{ form.payment_method.label(class="form-label") }}
+                        {{ form.payment_method(class="form-select") }}
+                        {% if form.payment_method.errors %}
+                        <div class="text-danger">
+                            {% for error in form.payment_method.errors %}
+                            <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-end">
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Create Bill
+        </button>
+    </div>
+    {{ form.csrf_token }}
+</form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let billItems = [];
+
+function searchProducts() {
+    const query = document.getElementById('productSearch').value;
+    if (!query) {
+        document.getElementById('searchResults').style.display = 'none';
+        return;
+    }
+
+    fetch(`/billing/products/search?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(products => {
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '';
+            
+            if (products.length === 0) {
+                resultsDiv.innerHTML = '<div class="list-group-item">No products found</div>';
+            } else {
+                products.forEach(product => {
+                    const item = document.createElement('a');
+                    item.href = '#';
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${product.name}</strong>
+                                <br>
+                                <small class="text-muted">Stock: ${product.quantity}</small>
+                            </div>
+                            <div class="text-end">
+                                <div>₹${product.price.toFixed(2)}</div>
+                                ${product.is_scheduled ? 
+                                    `<span class="badge bg-warning text-dark">Schedule ${product.schedule_category}</span>` : 
+                                    ''}
+                            </div>
+                        </div>
+                    `;
+                    item.onclick = (e) => {
+                        e.preventDefault();
+                        addProductToBill(product);
+                        document.getElementById('productSearch').value = '';
+                        resultsDiv.style.display = 'none';
+                    };
+                    resultsDiv.appendChild(item);
+                });
+            }
+            resultsDiv.style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error searching products');
+        });
+}
+
+// Add real-time search
+let searchTimeout;
+document.getElementById('productSearch').addEventListener('input', function(e) {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        searchProducts();
+    }, 300); // 300ms delay for better performance
+});
+
+function addProductToBill(product) {
+    const existingItem = billItems.find(item => item.id === product.id);
+    if (existingItem) {
+        if (existingItem.quantity >= product.quantity) {
+            alert('Cannot add more items than available in stock');
+            return;
+        }
+        existingItem.quantity++;
+    } else {
+        billItems.push({
+            id: product.id,
+            name: product.name,
+            price: parseFloat(product.price),
+            quantity: 1,
+            is_scheduled: product.is_scheduled,
+            schedule_category: product.schedule_category
+        });
+    }
+    updateBillTable();
+}
+
+function updateBillTable() {
+    const tbody = document.querySelector('#billItems tbody');
+    tbody.innerHTML = '';
+    let total = 0;
+
+    billItems.forEach((item, index) => {
+        const row = document.createElement('tr');
+        const itemTotal = parseFloat(item.price) * item.quantity;
+        total += itemTotal;
+
+        row.innerHTML = `
+            <td>
+                ${item.name}
+                ${item.is_scheduled ? 
+                    `<span class="badge bg-warning text-dark">Schedule ${item.schedule_category}</span>` : 
+                    ''}
+            </td>
+            <td>
+                <div class="input-group" style="width: 180px;">
+                    <button class="btn btn-outline-secondary" type="button" onclick="updateQuantity(${index}, -1)">-</button>
+                    <input type="number" class="form-control text-center" value="${item.quantity}" 
+                           onchange="setQuantity(${index}, this.value)" min="1" style="min-width: 70px;">
+                    <button class="btn btn-outline-secondary" type="button" onclick="updateQuantity(${index}, 1)">+</button>
+                </div>
+            </td>
+            <td>₹${parseFloat(item.price).toFixed(2)}</td>
+            <td>₹${itemTotal.toFixed(2)}</td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(${index})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    document.getElementById('totalAmount').textContent = total.toFixed(2);
+}
+
+function updateQuantity(index, change) {
+    const item = billItems[index];
+    const newQuantity = item.quantity + change;
+    if (newQuantity > 0) {
+        item.quantity = newQuantity;
+        updateBillTable();
+    }
+}
+
+function setQuantity(index, value) {
+    const item = billItems[index];
+    const newQuantity = parseInt(value);
+    if (newQuantity > 0) {
+        item.quantity = newQuantity;
+        updateBillTable();
+    }
+}
+
+function removeItem(index) {
+    billItems.splice(index, 1);
+    updateBillTable();
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', function(e) {
+    const searchResults = document.getElementById('searchResults');
+    const productSearch = document.getElementById('productSearch');
+    if (!searchResults.contains(e.target) && e.target !== productSearch) {
+        searchResults.style.display = 'none';
+    }
+});
+
+// Handle form submission
+document.getElementById('billForm').onsubmit = function(e) {
+    e.preventDefault();
+    
+    if (billItems.length === 0) {
+        alert('Please add at least one product to the bill');
+        return;
+    }
+
+    // Add items to form data
+    const formData = new FormData(this);
+    formData.append('items', JSON.stringify(billItems));
+
+    // Submit form
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else {
+            return response.json();
+        }
+    })
+    .then(data => {
+        if (data && data.error) {
+            alert(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error creating bill');
+    });
+};
+</script>
+{% endblock %} 

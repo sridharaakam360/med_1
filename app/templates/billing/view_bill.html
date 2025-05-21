@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Bill #{{ bill.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Bill #{{ bill.id }}</h1>
+        <div>
+            <a href="{{ url_for('billing.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Bills
+            </a>
+            <button type="button" class="btn btn-danger" onclick="deleteBill()">
+                <i class="fas fa-trash"></i> Delete Bill
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="card-title">Customer Details</h5>
+                            <p class="mb-1"><strong>Name:</strong> {{ bill.customer_name }}</p>
+                            <p class="mb-1"><strong>Phone:</strong> {{ bill.customer_phone }}</p>
+                            <p class="mb-1"><strong>Email:</strong> {{ bill.customer_email }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="card-title">Bill Details</h5>
+                            <p class="mb-1"><strong>Date:</strong> {{ bill.bill_date.strftime('%Y-%m-%d') }}</p>
+                            <p class="mb-1"><strong>Payment Method:</strong> {{ bill.payment_method }}</p>
+                            <p class="mb-1"><strong>Created By:</strong> {{ bill.created_by_name }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Items</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Price</th>
+                                    <th>Quantity</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td>{{ item.product_name }}</td>
+                                    <td>₹{{ "%.2f"|format(item.unit_price) }}</td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>₹{{ "%.2f"|format(item.unit_price * item.quantity) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                    <td><strong>₹{{ "%.2f"|format(bill.total_amount) }}</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Bill Modal -->
+<div class="modal fade" id="deleteBillModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Bill</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete this bill? This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('billing.delete_bill', bill_id=bill.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteBill() {
+    const modal = new bootstrap.Modal(document.getElementById('deleteBillModal'));
+    modal.show();
+}
+</script>
+{% endblock %} 
