@@ -11,7 +11,10 @@
         </a>
     </div>
 
-    <!-- Products (moved up) -->
+    <!-- ✅ Form start -->
+    <form id="billForm" method="POST" action="{{ url_for('billing.new_bill') }}">
+    
+    <!-- Products -->
     <div class="card mb-4">
         <div class="card-header">
             <h5 class="mb-0">Products</h5>
@@ -46,9 +49,7 @@
                     <tfoot>
                         <tr>
                             <td colspan="3" class="text-end"><strong>Total Amount:</strong></td>
-                            <td colspan="2">
-                                <strong>₹<span id="totalAmount">0.00</span></strong>
-                            </td>
+                            <td colspan="2"><strong>₹<span id="totalAmount">0.00</span></strong></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -56,7 +57,7 @@
         </div>
     </div>
 
-    <!-- Customer Information (moved down) -->
+    <!-- Customer Information -->
     <div class="card mb-4">
         <div class="card-header">
             <h5 class="mb-0">Customer Information</h5>
@@ -130,13 +131,16 @@
         </div>
     </div>
 
+    <!-- Submit -->
     <div class="text-end">
         <button type="submit" class="btn btn-primary">
             <i class="fas fa-save"></i> Create Bill
         </button>
     </div>
     {{ form.csrf_token }}
-</form>
+    </form>
+    <!-- ✅ Form end -->
+
 </div>
 {% endblock %}
 
@@ -202,7 +206,7 @@ document.getElementById('productSearch').addEventListener('input', function(e) {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         searchProducts();
-    }, 300); // 300ms delay for better performance
+    }, 300); // 300ms delay
 });
 
 function addProductToBill(product) {
@@ -288,7 +292,7 @@ function removeItem(index) {
     updateBillTable();
 }
 
-// Close search results when clicking outside
+// Close search results on outside click
 document.addEventListener('click', function(e) {
     const searchResults = document.getElementById('searchResults');
     const productSearch = document.getElementById('productSearch');
@@ -297,7 +301,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Handle form submission
+// ✅ Handle form submit
 document.getElementById('billForm').onsubmit = function(e) {
     e.preventDefault();
     
@@ -306,11 +310,9 @@ document.getElementById('billForm').onsubmit = function(e) {
         return;
     }
 
-    // Add items to form data
     const formData = new FormData(this);
     formData.append('items', JSON.stringify(billItems));
 
-    // Submit form
     fetch(this.action, {
         method: 'POST',
         body: formData
@@ -333,4 +335,4 @@ document.getElementById('billForm').onsubmit = function(e) {
     });
 };
 </script>
-{% endblock %} 
+{% endblock %}
